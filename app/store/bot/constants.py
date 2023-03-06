@@ -76,5 +76,5 @@ END_GAME_KEYBOARD = {
                 "color": "negative"
             },
         ],
-    ]
+    ],
 }

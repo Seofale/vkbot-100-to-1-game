@@ -1,4 +1,4 @@
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from sqlalchemy.ext.asyncio import (
     AsyncEngine, AsyncSession,
     create_async_engine, async_sessionmaker
@@ -14,11 +14,11 @@ if TYPE_CHECKING:
 class Database:
     def __init__(self, app: "Application"):
         self.app = app
-        self._engine: Optional[AsyncEngine] = None
-        self._db: Optional[DeclarativeBase] = None
-        self.session: Optional[AsyncSession] = None
+        self._engine: AsyncEngine | None = None
+        self._db: DeclarativeBase | None = None
+        self.session: AsyncSession | None = None
 
-    async def connect(self, *_: list, **__: dict) -> None:
+    async def connect(self, *args: Any, **kwargs: Any) -> None:
         self._db = Base
         self._engine = create_async_engine(
             "postgresql+asyncpg://{}:{}@{}/{}".format(
@@ -33,6 +33,6 @@ class Database:
             expire_on_commit=False,
         )
 
-    async def disconnect(self, *_: list, **__: dict) -> None:
+    async def disconnect(self, *args: Any, **kwargs: Any) -> None:
         if self._engine:
             await self._engine.dispose()

@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, desc
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.expression import func
 from app.base.base_accessor import BaseAccessor
@@ -9,7 +9,7 @@ from app.game.models import (
     GameAnswersModel,
 )
 from app.game.dataclasses import (
-    User, Game, Question, Answer,
+    User, Game, Question, Answer, UserStatistics
 )
 
 
@@ -25,29 +25,62 @@ class GameAccessor(BaseAccessor):
             )
 
     async def get_user(self, vk_id: int) -> User | None:
-        query = select(UserModel).where(UserModel.vk_id == vk_id)
+        query = select(
+            UserModel
+        ).where(UserModel.vk_id == vk_id)
         async with self.app.database.session() as session:
             result = await session.execute(query)
             user_model = result.scalar()
             if user_model:
                 return User(
                     id=user_model.id,
-                    vk_id=user_model.vk_id,
+                    vk_id=user_model.vk_id
                 )
             return None
 
-    async def get_winner_id_and_points(self, game_id: int) -> (int, int):
+    async def get_user_statistics(self, game_id: int, user_id: int) -> bool:
+        query = select(StatisticsModel).where(
+            and_(
+                StatisticsModel.game_id == game_id,
+                StatisticsModel.user_id == user_id
+            )
+        )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            user_statistics_model = result.scalar()
+            if user_statistics_model:
+                return UserStatistics(
+                    id=user_statistics_model.id,
+                    user_id=user_statistics_model.user_id,
+                    game_id=user_statistics_model.game_id,
+                    is_creator=user_statistics_model.is_creator,
+                    points=user_statistics_model.points,
+                    failures=user_statistics_model.failures,
+                    is_lost=user_statistics_model.is_lost
+                )
+            return None
+
+    async def get_winner_with_score(self, game_id: int) -> User:
         query = select(
-            UserModel.vk_id, func.max(StatisticsModel.points)
+            UserModel
         ).where(
             StatisticsModel.game_id == game_id
         ).join(
             UserModel, StatisticsModel.user_id == UserModel.id
-        ).group_by(StatisticsModel.user_id, UserModel.vk_id)
+        ).add_columns(
+            func.max(StatisticsModel.points)
+        ).group_by(
+            UserModel.id
+        ).order_by(desc(func.max(StatisticsModel.points)))
 
         async with self.app.database.session() as session:
             result = await session.execute(query)
-            return (result.all()[0])
+            user_model, score = result.first()
+            return User(
+                id=user_model.id,
+                vk_id=user_model.vk_id,
+                score=score
+            )
 
     async def check_user_is_creator(self, game_id: int, user_id: int) -> bool:
         query = select(StatisticsModel).where(
@@ -127,7 +160,7 @@ class GameAccessor(BaseAccessor):
             if answer_model:
                 return Answer(
                     id=answer_model.id,
-                    title=answer_model.title,
+                    title=answer_model.title.lower(),
                     question_id=answer_model.question_id,
                     score=answer_model.score
                 )
@@ -183,6 +216,46 @@ class GameAccessor(BaseAccessor):
             statistics_model.points += score
             await session.merge(statistics_model)
             await session.commit()
+
+    async def add_fail_to_user(self, game_id: int, user_id: int) -> None:
+        query = select(StatisticsModel).where(
+            and_(
+                StatisticsModel.user_id == user_id,
+                StatisticsModel.game_id == game_id,
+            )
+        )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            statistics_model = result.scalar()
+            statistics_model.failures += 1
+            await session.merge(statistics_model)
+            await session.commit()
+
+    async def make_user_lost(self, game_id: int, user_id: int) -> None:
+        query = select(StatisticsModel).where(
+            and_(
+                StatisticsModel.user_id == user_id,
+                StatisticsModel.game_id == game_id,
+            )
+        )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            statistics_model = result.scalar()
+            statistics_model.is_lost = True
+            await session.merge(statistics_model)
+            await session.commit()
+
+    async def get_user_failures_count(self, game_id: int, user_id: int) -> int:
+        query = select(StatisticsModel).where(
+            and_(
+                StatisticsModel.user_id == user_id,
+                StatisticsModel.game_id == game_id,
+            )
+        )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            statistics_model = result.scalar()
+            return statistics_model.failures
 
     async def check_user_in_game(self, user_id: int, game_id: int) -> bool:
         query = select(StatisticsModel).where(

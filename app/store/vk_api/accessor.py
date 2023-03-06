@@ -1,7 +1,6 @@
 import random
 import typing
 import json
-from typing import Optional
 
 from aiohttp import TCPConnector
 from aiohttp.client import ClientSession
@@ -22,11 +21,11 @@ API_PATH = "https://api.vk.com/method/"
 class VkApiAccessor(BaseAccessor):
     def __init__(self, app: "Application", *args, **kwargs):
         super().__init__(app, *args, **kwargs)
-        self.session: Optional[ClientSession] = None
-        self.key: Optional[str] = None
-        self.server: Optional[str] = None
-        self.poller: Optional[Poller] = None
-        self.ts: Optional[int] = None
+        self.session: ClientSession | None = None
+        self.key: str | None = None
+        self.server: str | None = None
+        self.poller: Poller | None = None
+        self.ts: int | None = None
 
     async def connect(self, app: "Application"):
         self.session = ClientSession(connector=TCPConnector(verify_ssl=False))
@@ -89,20 +88,24 @@ class VkApiAccessor(BaseAccessor):
             raw_updates = data.get("updates", [])
             updates = []
             for update in raw_updates:
+                message = update["object"].get("message")
                 updates.append(
                     Update(
                         type=update["type"],
                         object=UpdateObject(
                             message=UpdateMessage(
-                                id=update["object"]["message"]["id"],
-                                from_id=update["object"]["message"]["from_id"],
-                                text=update["object"]["message"]["text"],
-                                peer_id=update["object"]["message"]["peer_id"],
-                            ) if update["object"].get("message") else None,
+                                id=message["id"],
+                                from_id=message["from_id"],
+                                text=message["text"],
+                                peer_id=message["peer_id"],
+                            ) if message else None,
                             action=UpdateAction(
-                                type=update["object"]["message"]["action"]["type"],
-                                peer_id=update["object"]["message"]["peer_id"],
-                            ) if update["object"].get("message", {}).get("action") else None,
+                                type=message["action"]["type"],
+                                peer_id=message["peer_id"],
+                            ) if update["object"].get(
+                                "message",
+                                {}
+                            ).get("action") else None,
                             event=UpdateEvent(
                                 user_id=update["object"]["user_id"],
                                 peer_id=update["object"]["peer_id"],
@@ -112,7 +115,7 @@ class VkApiAccessor(BaseAccessor):
                         ),
                     )
                 )
-            await self.app.store.bots_manager.handle_updates(updates=updates)
+            await self.app.store.bot_manager.handle_updates(updates=updates)
 
     async def send_message(self, message: Message):
         async with self.session.get(

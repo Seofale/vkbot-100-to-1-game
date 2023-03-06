@@ -2,10 +2,12 @@ import typing
 import json
 from logging import getLogger
 
-from app.store.vk_api.dataclasses import Message, Update, UpdateEvent
-from app.game.dataclasses import Game, User
+from app.store.vk_api.dataclasses import (
+    Message, Update, UpdateEvent, UpdateMessage
+)
+from app.game.dataclasses import Game
 from app.store.bot import constants
-from app.store.bot.utils import get_answers_keyboard
+from app.store.bot.enums import ActionTypesEnum, BotCommandsEnum
 
 if typing.TYPE_CHECKING:
     from app.web.app import Application
@@ -20,34 +22,51 @@ class BotManager:
     async def handle_updates(self, updates: list[Update]) -> None:
         for update in updates:
             if update.object.action:
-                if update.object.action.type == "chat_invite_user":
+                if update.object.action.type == ActionTypesEnum \
+                        .user_joined_chat.value:
                     await self.app.store.vk_api.send_message(
                         Message(
                             peer_id=update.object.message.peer_id,
                             keyboard=json.dumps(
                                 constants.CREATE_GAME_KEYBOARD
                             ),
-                            text=".",
+                            text="Привет! Теперь вам доступна клавиатура бота",
                         )
                     )
-            if update.object.event:
-                if update.object.event.payload["command"] == "create":
-                    await self.create_game(event=update.object.event)
 
-                if update.object.event.payload["command"] == "end":
-                    await self.end_game(event=update.object.event)
+            elif update.object.event:
+                event = update.object.event
 
-                if update.object.event.payload["command"] == "join":
-                    await self.join_game(event=update.object.event)
+                match update.object.event.payload["command"]:
+                    case BotCommandsEnum.create_game.value:
+                        await self.create_game(event=event)
 
-                if update.object.event.payload["command"] == "start":
-                    await self.start_game(event=update.object.event)
+                    case BotCommandsEnum.end_game.value:
+                        await self.end_game(event=event)
 
-                if update.object.event.payload["command"] == "answer":
-                    await self.answer_handler(event=update.object.event)
+                    case BotCommandsEnum.user_joined_game.value:
+                        await self.join_game(event=event)
+
+                    case BotCommandsEnum.start_game.value:
+                        await self.start_game(event=event)
+
+            elif update.object.message:
+                message = update.object.message
+                await self.handle_answer(message=message)
 
     async def create_game(self, event: UpdateEvent) -> None:
+        game = await self.app.store.game.get_game_by_peer_id(
+            peer_id=event.peer_id
+        )
+        if game:
+            await self.app.store.vk_api.show_snackbar_event_answer(
+                update_event=event,
+                text="В этом чате уже создана игра"
+            )
+            return
+
         game = await self.app.store.game.create_game(peer_id=event.peer_id)
+
         user = await self.app.store.game.get_user(vk_id=event.user_id)
         if not user:
             user = await self.app.store.game.create_user(vk_id=event.user_id)
@@ -95,11 +114,6 @@ class BotManager:
         if not user:
             user = await self.app.store.game.create_user(vk_id=event.user_id)
 
-        await self.app.store.game.create_user_statistics(
-            user_id=user.id,
-            game_id=game.id
-        )
-
         user_in_game = await self.app.store.game.check_user_in_game(
             user_id=user.id,
             game_id=game.id
@@ -110,6 +124,12 @@ class BotManager:
                 update_event=event,
                 text="Вы уже присоединились к этой игре"
             )
+            return
+
+        await self.app.store.game.create_user_statistics(
+            user_id=user.id,
+            game_id=game.id
+        )
 
         await self.app.store.vk_api.show_snackbar_event_answer(
             update_event=event,
@@ -123,8 +143,14 @@ class BotManager:
         )
 
     async def start_game(self, event: UpdateEvent) -> None:
-        game, user = await self.get_game_and_user_if_user_in_game(event=event)
+        game = await self.app.store.game.get_game_by_peer_id(
+            peer_id=event.peer_id
+        )
         if not game:
+            return
+
+        user = await self.app.store.game.get_user(vk_id=event.user_id)
+        if not user:
             return
 
         if not (await self.app.store.game.check_user_is_creator(
@@ -149,19 +175,83 @@ class BotManager:
             Message(
                 peer_id=event.peer_id,
                 text=question.title,
-                keyboard=get_answers_keyboard(question.answers)
+                keyboard=json.dumps(constants.END_GAME_KEYBOARD)
             )
         )
 
-    async def answer_handler(self, event: UpdateEvent) -> None:
-        game, user = await self.get_game_and_user_if_user_in_game(event=event)
-        active_question = await self.app.store.game.get_question_in_active_roadmap(
+    async def handle_answer(self, message: UpdateMessage) -> None:
+        game = await self.app.store.game.get_game_by_peer_id(
+            peer_id=message.peer_id
+        )
+        if not game:
+            return
+
+        user = await self.app.store.game.get_user(
+            vk_id=message.from_id
+        )
+        if not user:
+            return
+
+        user_statistics = await self.app.store.game.get_user_statistics(
+            user_id=user.id,
             game_id=game.id
         )
+        if not user_statistics:
+            return
+        if user_statistics.is_lost:
+            return
+
+        active_question = await self.app.store.game \
+            .get_question_in_active_roadmap(
+                game_id=game.id
+            )
         answer = await self.app.store.game.get_answer_by_title_and_question_id(
-            title=event.payload["answer"],
+            title=message.text.lower(),
             question_id=active_question.id
         )
+        if not answer:
+            await self.app.store.game.add_fail_to_user(
+                game_id=game.id,
+                user_id=user.id
+            )
+
+            user_failures_count = await self.app.store.game \
+                .get_user_failures_count(
+                    game_id=game.id,
+                    user_id=user.id
+                )
+            if user_failures_count == 3:
+                await self.app.store.game.make_user_lost(
+                    game_id=game.id,
+                    user_id=user.id
+                )
+                await self.app.store.vk_api.send_message(
+                    Message(
+                        peer_id=message.peer_id,
+                        text=f"@id{user.vk_id} \
+                            исчерпал все свои попытки и выбыл из игры",
+                    )
+                )
+            await self.app.store.vk_api.send_message(
+                Message(
+                    peer_id=message.peer_id,
+                    text=f"@id{user.vk_id} \
+                            первым ответил на вопрос, но оказался неправ :(",
+                )
+            )
+
+            await self.send_next_question_or_end_game(game=game)
+
+            return
+
+        await self.app.store.vk_api.send_message(
+            Message(
+                peer_id=message.peer_id,
+                text=f"@id{user.vk_id} \
+                            получил {answer.score} очков за свой ответ",
+            )
+        )
+
         await self.app.store.game.add_points_to_user(
             user_id=user.id,
             game_id=game.id,
@@ -172,75 +262,35 @@ class BotManager:
             answer_id=answer.id,
             user_id=user.id
         )
+
+        await self.send_next_question_or_end_game(game=game)
+
+    async def send_next_question_or_end_game(self, game: Game) -> None:
         next_question_exists = await self.app.store.game.move_to_next_question(
             game_id=game.id
         )
         if not next_question_exists:
-            winner_vk_id, points = await self.app.store.game.get_winner_id_and_points(
+            winner = await self.app.store.game.get_winner_with_score(
                 game_id=game.id
             )
             await self.app.store.vk_api.send_message(
                 Message(
-                    peer_id=event.peer_id,
-                    text=f"Игра окончена. Победитель: @id{winner_vk_id}, количество очков: {points}",
+                    peer_id=game.peer_id,
+                    text=f"Игра окончена. Победитель: @id{winner.vk_id}, \
+                        количество очков: {winner.score}",
                     keyboard=json.dumps(constants.CREATE_GAME_KEYBOARD)
                 )
             )
-            await self.app.store.game.end_game(peer_id=event.peer_id)
-
-            await self.app.store.vk_api.show_snackbar_event_answer(
-                update_event=event,
-                text="Игра окончена"
-            )
+            await self.app.store.game.end_game(peer_id=game.peer_id)
             return
 
-        await self.app.store.vk_api.show_snackbar_event_answer(
-            update_event=event,
-            text="Вы выбрали ответ"
-        )
-        active_question = await self.app.store.game.get_question_in_active_roadmap(
-            game_id=game.id
-        )
+        active_question = await self.app.store.game \
+            .get_question_in_active_roadmap(
+                game_id=game.id
+            )
         await self.app.store.vk_api.send_message(
             Message(
-                peer_id=event.peer_id,
-                text=active_question.title,
-                keyboard=get_answers_keyboard(active_question.answers)
+                peer_id=game.peer_id,
+                text=active_question.title
             )
         )
-
-    async def get_game_and_user_if_user_in_game(
-        self,
-        event: UpdateEvent
-    ) -> (Game, User):
-        game = await self.app.store.game.get_game_by_peer_id(
-            peer_id=event.peer_id
-        )
-        user = await self.app.store.game.get_user(vk_id=event.user_id)
-        if not user:
-            await self.app.store.vk_api.show_snackbar_event_answer(
-                update_event=event,
-                text="Пока вы не участвовали ни в одной игре :("
-            )
-            return (None, None)
-
-        if not game:
-            await self.app.store.vk_api.show_snackbar_event_answer(
-                update_event=event,
-                text="Вы не можете присоединиться к игре, так как она не создана в этом чате :("
-            )
-            return (None, None)
-
-        user_in_game = await self.app.store.game.check_user_in_game(
-            user_id=user.id,
-            game_id=game.id
-        )
-
-        if not user_in_game:
-            await self.app.store.vk_api.show_snackbar_event_answer(
-                update_event=event,
-                text="Вы не присоединились к этой игре"
-            )
-            return (None, None)
-
-        return (game, user)

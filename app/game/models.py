@@ -30,6 +30,7 @@ class StatisticsModel(Base):
     is_creator: Mapped[bool] = mapped_column(default=False)
     points: Mapped[int] = mapped_column(default=0)
     failures: Mapped[int] = mapped_column(default=0)
+    is_lost: Mapped[bool] = mapped_column(default=False, nullable=True)
 
 
 class QuestionModel(Base):
