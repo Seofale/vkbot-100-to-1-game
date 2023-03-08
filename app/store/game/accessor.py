@@ -9,7 +9,8 @@ from app.game.models import (
     GameAnswersModel,
 )
 from app.game.dataclasses import (
-    User, Game, Question, Answer, UserStatistics
+    User, Game, Question,
+    Answer, UserStatistics, Roadmap
 )
 
 
@@ -19,10 +20,7 @@ class GameAccessor(BaseAccessor):
             user_model = UserModel(vk_id=vk_id)
             session.add(user_model)
             await session.commit()
-            return User(
-                id=user_model.id,
-                vk_id=user_model.vk_id,
-            )
+            return user_model.to_dataclass()
 
     async def get_user(self, vk_id: int) -> User | None:
         query = select(
@@ -32,10 +30,7 @@ class GameAccessor(BaseAccessor):
             result = await session.execute(query)
             user_model = result.scalar()
             if user_model:
-                return User(
-                    id=user_model.id,
-                    vk_id=user_model.vk_id
-                )
+                return user_model.to_dataclass()
             return None
 
     async def get_user_statistics(self, game_id: int, user_id: int) -> bool:
@@ -49,15 +44,7 @@ class GameAccessor(BaseAccessor):
             result = await session.execute(query)
             user_statistics_model = result.scalar()
             if user_statistics_model:
-                return UserStatistics(
-                    id=user_statistics_model.id,
-                    user_id=user_statistics_model.user_id,
-                    game_id=user_statistics_model.game_id,
-                    is_creator=user_statistics_model.is_creator,
-                    points=user_statistics_model.points,
-                    failures=user_statistics_model.failures,
-                    is_lost=user_statistics_model.is_lost
-                )
+                user_statistics_model.to_dataclass()
             return None
 
     async def get_winner_with_score(self, game_id: int) -> User:
@@ -117,30 +104,20 @@ class GameAccessor(BaseAccessor):
             session.add_all(roadmaps)
             await session.commit()
 
-            return Game(
-                id=game_model.id,
-                peer_id=game_model.peer_id,
-                started_at=game_model.started_at,
-                ended_at=game_model.ended_at
-            )
+            return game_model.to_dataclass()
 
     async def get_game_by_peer_id(self, peer_id: int) -> Game | None:
         query = select(GameModel).where(
             and_(
                 GameModel.peer_id == peer_id,
-                GameModel.ended_at == None,
+                GameModel.in_process == True,
             )
         )
         async with self.app.database.session() as session:
             result = await session.execute(query)
             game_model = result.scalar()
             if game_model:
-                return Game(
-                    id=game_model.id,
-                    peer_id=game_model.peer_id,
-                    started_at=game_model.started_at,
-                    ended_at=game_model.ended_at
-                )
+                return game_model.to_dataclass()
             return None
 
     async def get_answer_by_title_and_question_id(
@@ -158,12 +135,7 @@ class GameAccessor(BaseAccessor):
             result = await session.execute(query)
             answer_model = result.scalar()
             if answer_model:
-                return Answer(
-                    id=answer_model.id,
-                    title=answer_model.title.lower(),
-                    question_id=answer_model.question_id,
-                    score=answer_model.score
-                )
+                return answer_model.to_dataclass()
             return None
 
     async def create_game_answer(
@@ -281,7 +253,8 @@ class GameAccessor(BaseAccessor):
                 id=game.id,
                 started_at=game.started_at,
                 ended_at=game.ended_at,
-                peer_id=game.peer_id
+                peer_id=game.peer_id,
+                in_process=False
             ))
             await session.commit()
 
@@ -307,18 +280,9 @@ class GameAccessor(BaseAccessor):
             if question_model:
                 for answer_model in question_model.answers:
                     answers.append(
-                        Answer(
-                            id=answer_model.id,
-                            title=answer_model.title,
-                            question_id=answer_model.question_id,
-                            score=answer_model.score
-                        )
+                        answer_model.to_dataclass()
                     )
-                return Question(
-                    id=question_model.id,
-                    title=question_model.title,
-                    answers=answers
-                )
+                return question_model.to_dataclass()
             return None
 
     async def move_to_next_question(self, game_id: int) -> bool:
@@ -333,7 +297,6 @@ class GameAccessor(BaseAccessor):
             result = await session.execute(query)
             roadmap_models = result.scalars().all()
             for index in range(len(roadmap_models)):
-                self.logger.info(index)
                 roadmap = roadmap_models[index]
                 if roadmap.status == 1:
                     roadmap.status = 0
@@ -347,3 +310,244 @@ class GameAccessor(BaseAccessor):
                     await session.merge(next_roadmap)
                     await session.commit()
                     return True
+
+    async def get_question_by_title(self, title: str) -> Question | None:
+        query = select(
+            QuestionModel
+        ).options(
+            selectinload(QuestionModel.answers)
+        ).where(
+            QuestionModel.title == title
+        )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            question_model = result.scalar()
+            if question_model:
+                answers = []
+                for answer_model in question_model.answers:
+                    answers.append(
+                        answer_model.to_dataclass()
+                    )
+                return question_model.to_dataclass()
+            return None
+
+    async def get_question_by_id(self, id: int) -> Question | None:
+        query = select(
+            QuestionModel
+        ).options(
+            selectinload(QuestionModel.answers)
+        ).where(
+            QuestionModel.id == id
+        )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            question_model = result.scalar()
+            if question_model:
+                answers = []
+                for answer_model in question_model.answers:
+                    answers.append(
+                        answer_model.to_dataclass()
+                    )
+                return question_model.to_dataclass()
+            return None
+
+    async def create_question(
+        self,
+        title: str,
+        answers: list[Answer]
+    ) -> Question:
+        async with self.app.database.session() as session:
+            question_model = QuestionModel(
+                title=title
+            )
+            answers_models = []
+            for answer in answers:
+                answer_model = AnswerModel(
+                    title=answer.title,
+                    question_id=question_model.id,
+                    score=answer.score
+                )
+                answers_models.append(answer_model)
+            question_model.answers = answers_models
+            session.add(question_model)
+            await session.commit()
+
+            response_answers = []
+            for answer_model in question_model.answers:
+                response_answers.append(
+                    answer_model.to_dataclass()
+                )
+            return Question(
+                question_model.to_dataclass()
+            )
+
+    async def edit_question(
+        self,
+        id: int,
+        title: str,
+        answers: list[Answer]
+    ) -> Question:
+        query = select(
+            QuestionModel
+        ).options(
+            selectinload(QuestionModel.answers)
+        ).where(
+            QuestionModel.id == id
+        )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            question_model = result.scalar()
+            question_id = question_model.id
+            if question_model:
+                for answer in answers:
+                    answer_model = AnswerModel(
+                        id=answer.id,
+                        title=answer.title,
+                        question_id=question_id,
+                        score=answer.score
+                    )
+                    await session.merge(answer_model)
+                question_model.title = title
+                question_model = await session.merge(question_model)
+                await session.commit()
+                return question_model.to_dataclass()
+
+    async def list_questions(
+        self,
+        game_id: int | None = None
+    ) -> list[Question]:
+        query = select(
+            QuestionModel
+        ).options(
+            selectinload(QuestionModel.answers)
+        )
+        if game_id:
+            query = select(
+                QuestionModel
+            ).options(
+                selectinload(QuestionModel.answers)
+            ).join(
+                RoadmapModel, QuestionModel.id == RoadmapModel.question_id
+            ).where(
+                RoadmapModel.game_id == game_id
+            )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            question_models = result.scalars()
+            questions = []
+            for question_model in question_models:
+                answers = []
+                for answer_model in question_model.answers:
+                    answers.append(
+                        answer_model.to_dataclass()
+                    )
+                questions.append(
+                    Question(
+                        id=question_model.id,
+                        title=question_model.title,
+                        answers=answers
+                    )
+                )
+            return questions
+
+    async def list_games(self, peer_id: int | None = None) -> list[Game]:
+        query = select(
+            GameModel
+        )
+        if peer_id:
+            query = select(
+                GameModel
+            ).where(
+                GameModel.peer_id == peer_id
+            )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            game_models = result.scalars()
+            games = []
+            for game_model in game_models:
+                games.append(
+                    game_model.to_dataclass()
+                )
+            return games
+
+    async def list_users(self, game_id: int | None = None) -> list[Game]:
+        query = select(
+            UserModel
+        )
+        if game_id:
+            query = select(
+                UserModel
+            ).join(
+                StatisticsModel, UserModel.id == StatisticsModel.user_id
+            ).where(
+                StatisticsModel.game_id == game_id
+            )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            user_models = result.scalars()
+            users = []
+            for user_model in user_models:
+                users.append(
+                    user_model.to_dataclass()
+                )
+            return users
+
+    async def list_roadmaps(self, game_id: int | None = None) -> list[Roadmap]:
+        query = select(
+            RoadmapModel
+        )
+        if game_id:
+           query = select(
+               RoadmapModel
+           ).where(
+               RoadmapModel.game_id == game_id
+           )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            roadmap_models = result.scalars()
+            roadmaps = []
+            for roadmap_model in roadmap_models:
+                roadmaps.append(
+                    roadmap_model.to_dataclass()
+                )
+            return roadmaps
+
+    async def list_user_statistics(
+        self,
+        game_id: int | None = None,
+        user_id: int | None = None
+    ) -> list[UserStatistics]:
+        query = select(
+            StatisticsModel
+        )
+        if game_id or user_id:
+            if game_id and user_id:
+                query = select(
+                    StatisticsModel
+                ).where(
+                    and_(
+                        StatisticsModel.game_id == game_id,
+                        StatisticsModel.user_id == user_id
+                    )
+                )
+            elif game_id:
+                query = select(
+                    StatisticsModel
+                ).where(
+                    StatisticsModel.game_id == game_id
+                )
+            elif user_id:
+                query = select(
+                    StatisticsModel
+                ).where(
+                    StatisticsModel.user_id == user_id
+                )
+        async with self.app.database.session() as session:
+            result = await session.execute(query)
+            user_statistics_models = result.scalars()
+            user_statistics = []
+            for user_statistics_model in user_statistics_models:
+                user_statistics.append(
+                    user_statistics_model.to_dataclass()
+                )
+            return user_statistics

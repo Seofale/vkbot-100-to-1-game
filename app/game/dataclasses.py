@@ -24,6 +24,7 @@ class UserStatistics:
 class Game:
     id: int
     peer_id: int
+    in_process: bool
     started_at: datetime.datetime
     ended_at: datetime.datetime | None = None
 
@@ -37,7 +38,23 @@ class Question:
 
 @dataclass
 class Answer:
-    id: int
     title: str
-    question_id: int
     score: int
+    id: int | None = None
+    question_id: int | None = None
+
+
+@dataclass
+class Roadmap:
+    id: int
+    game_id: int
+    question_id: int
+    status: int
+
+
+@dataclass
+class GameAnswer:
+    id: int
+    game_id: int
+    user_id: int
+    answer_id: int
