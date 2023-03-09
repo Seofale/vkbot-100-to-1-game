@@ -7,6 +7,7 @@ from aiohttp_apispec import validation_middleware
 from aiohttp_session import get_session
 
 from app.web.utils import error_json_response
+from app.admin.dataclasses import Admin
 
 if typing.TYPE_CHECKING:
     from app.web.app import Application, Request
@@ -21,6 +22,14 @@ HTTP_ERROR_CODES = {
     409: "conflict",
     500: "internal_server_error",
 }
+
+
+@middleware
+async def auth_middleware(request: "Request", handler: callable):
+    session = await get_session(request)
+    if session:
+        request.admin = Admin.from_session(session)
+    return await handler(request)
 
 
 @middleware
@@ -49,5 +58,6 @@ async def error_handling_middleware(request: "Request", handler):
 
 
 def setup_middlewares(app: "Application"):
+    app.middlewares.append(auth_middleware)
     app.middlewares.append(error_handling_middleware)
     app.middlewares.append(validation_middleware)

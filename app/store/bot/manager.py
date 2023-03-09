@@ -1,13 +1,14 @@
 import typing
-import json
 from logging import getLogger
 
 from app.store.vk_api.dataclasses import (
     Message, Update, UpdateEvent, UpdateMessage
 )
 from app.game.dataclasses import Game
-from app.store.bot import constants
 from app.store.bot.enums import ActionTypesEnum, BotCommandsEnum
+from app.store.bot.keyboards import (
+    start_keyboard, create_keyboard, end_keyboard
+)
 
 if typing.TYPE_CHECKING:
     from app.web.app import Application
@@ -27,9 +28,7 @@ class BotManager:
                     await self.app.store.vk_api.send_message(
                         Message(
                             peer_id=update.object.message.peer_id,
-                            keyboard=json.dumps(
-                                constants.CREATE_GAME_KEYBOARD
-                            ),
+                            keyboard=create_keyboard,
                             text="Привет! Теперь вам доступна клавиатура бота",
                         )
                     )
@@ -85,7 +84,7 @@ class BotManager:
         await self.app.store.vk_api.send_message(
             Message(
                 peer_id=event.peer_id,
-                keyboard=json.dumps(constants.START_GAME_KEYBOARD),
+                keyboard=start_keyboard,
                 text=f"Только что @id{event.user_id} создал игру"
             )
         )
@@ -102,7 +101,7 @@ class BotManager:
             Message(
                 peer_id=event.peer_id,
                 text=f"Только что @id{event.user_id} закончил игру",
-                keyboard=json.dumps(constants.CREATE_GAME_KEYBOARD)
+                keyboard=create_keyboard
             )
         )
 
@@ -175,7 +174,7 @@ class BotManager:
             Message(
                 peer_id=event.peer_id,
                 text=question.title,
-                keyboard=json.dumps(constants.END_GAME_KEYBOARD)
+                keyboard=end_keyboard
             )
         )
 
@@ -278,7 +277,7 @@ class BotManager:
                     peer_id=game.peer_id,
                     text=f"Игра окончена. Победитель: @id{winner.vk_id}, \
                         количество очков: {winner.score}",
-                    keyboard=json.dumps(constants.CREATE_GAME_KEYBOARD)
+                    keyboard=create_keyboard
                 )
             )
             await self.app.store.game.end_game(peer_id=game.peer_id)
