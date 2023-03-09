@@ -127,7 +127,8 @@ class VkApiAccessor(BaseAccessor):
                     "peer_id": message.peer_id,
                     "message": message.text,
                     "access_token": self.app.config.bot.token,
-                    "keyboard": message.keyboard
+                    "keyboard": json.dumps(message.keyboard.to_dict())
+                    if message.keyboard else ""
                 },
             )
         ) as resp:

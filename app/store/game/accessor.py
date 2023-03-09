@@ -44,7 +44,7 @@ class GameAccessor(BaseAccessor):
             result = await session.execute(query)
             user_statistics_model = result.scalar()
             if user_statistics_model:
-                user_statistics_model.to_dataclass()
+                return user_statistics_model.to_dataclass()
             return None
 
     async def get_winner_with_score(self, game_id: int) -> User:
@@ -110,7 +110,7 @@ class GameAccessor(BaseAccessor):
         query = select(GameModel).where(
             and_(
                 GameModel.peer_id == peer_id,
-                GameModel.in_process == True,
+                GameModel.in_process == True,  # noqa
             )
         )
         async with self.app.database.session() as session:
@@ -249,13 +249,15 @@ class GameAccessor(BaseAccessor):
         )
         game.ended_at = datetime.datetime.now()
         async with self.app.database.session() as session:
-            await session.merge(GameModel(
-                id=game.id,
-                started_at=game.started_at,
-                ended_at=game.ended_at,
-                peer_id=game.peer_id,
-                in_process=False
-            ))
+            await session.merge(
+                GameModel(
+                    id=game.id,
+                    started_at=game.started_at,
+                    ended_at=game.ended_at,
+                    peer_id=game.peer_id,
+                    in_process=False
+                )
+            )
             await session.commit()
 
     async def get_question_in_active_roadmap(
@@ -356,7 +358,7 @@ class GameAccessor(BaseAccessor):
         title: str,
         answers: list[Answer]
     ) -> Question:
-        async with self.app.database.session() as session:
+        async with self.app.database.session.begin() as session:
             question_model = QuestionModel(
                 title=title
             )
@@ -377,9 +379,7 @@ class GameAccessor(BaseAccessor):
                 response_answers.append(
                     answer_model.to_dataclass()
                 )
-            return Question(
-                question_model.to_dataclass()
-            )
+            return question_model.to_dataclass()
 
     async def edit_question(
         self,
@@ -394,16 +394,15 @@ class GameAccessor(BaseAccessor):
         ).where(
             QuestionModel.id == id
         )
-        async with self.app.database.session() as session:
+        async with self.app.database.session.begin() as session:
             result = await session.execute(query)
             question_model = result.scalar()
-            question_id = question_model.id
             if question_model:
                 for answer in answers:
                     answer_model = AnswerModel(
                         id=answer.id,
                         title=answer.title,
-                        question_id=question_id,
+                        question_id=question_model.id,
                         score=answer.score
                     )
                     await session.merge(answer_model)
@@ -414,6 +413,8 @@ class GameAccessor(BaseAccessor):
 
     async def list_questions(
         self,
+        page: int | None,
+        offset: int = 5,
         game_id: int | None = None
     ) -> list[Question]:
         query = select(
@@ -422,15 +423,13 @@ class GameAccessor(BaseAccessor):
             selectinload(QuestionModel.answers)
         )
         if game_id:
-            query = select(
-                QuestionModel
-            ).options(
-                selectinload(QuestionModel.answers)
-            ).join(
+            query = query.join(
                 RoadmapModel, QuestionModel.id == RoadmapModel.question_id
             ).where(
                 RoadmapModel.game_id == game_id
             )
+        if page:
+            query = query.limit(offset).offset(offset * (page - 1))
         async with self.app.database.session() as session:
             result = await session.execute(query)
             question_models = result.scalars()
@@ -450,16 +449,20 @@ class GameAccessor(BaseAccessor):
                 )
             return questions
 
-    async def list_games(self, peer_id: int | None = None) -> list[Game]:
+    async def list_games(
+            self,
+            page: int | None,
+            offset: int = 5,
+            peer_id: int | None = None) -> list[Game]:
         query = select(
             GameModel
         )
         if peer_id:
-            query = select(
-                GameModel
-            ).where(
+            query = query.where(
                 GameModel.peer_id == peer_id
             )
+        if page:
+            query = query.limit(offset).offset(offset * (page - 1))
         async with self.app.database.session() as session:
             result = await session.execute(query)
             game_models = result.scalars()
@@ -470,18 +473,23 @@ class GameAccessor(BaseAccessor):
                 )
             return games
 
-    async def list_users(self, game_id: int | None = None) -> list[Game]:
+    async def list_users(
+        self,
+        page: int | None,
+        offset: int = 5,
+        game_id: int | None = None
+    ) -> list[Game]:
         query = select(
             UserModel
         )
         if game_id:
-            query = select(
-                UserModel
-            ).join(
+            query = query.join(
                 StatisticsModel, UserModel.id == StatisticsModel.user_id
             ).where(
                 StatisticsModel.game_id == game_id
             )
+        if page:
+            query = query.limit(offset).offset(offset * (page - 1))
         async with self.app.database.session() as session:
             result = await session.execute(query)
             user_models = result.scalars()
@@ -492,16 +500,21 @@ class GameAccessor(BaseAccessor):
                 )
             return users
 
-    async def list_roadmaps(self, game_id: int | None = None) -> list[Roadmap]:
+    async def list_roadmaps(
+        self,
+        page: int | None,
+        offset: int = 5,
+        game_id: int | None = None
+    ) -> list[Roadmap]:
         query = select(
             RoadmapModel
         )
         if game_id:
-           query = select(
-               RoadmapModel
-           ).where(
-               RoadmapModel.game_id == game_id
-           )
+            query = query.where(
+                RoadmapModel.game_id == game_id
+            )
+        if page:
+            query = query.limit(offset).offset(offset * (page - 1))
         async with self.app.database.session() as session:
             result = await session.execute(query)
             roadmap_models = result.scalars()
@@ -514,6 +527,8 @@ class GameAccessor(BaseAccessor):
 
     async def list_user_statistics(
         self,
+        page: int | None,
+        offset: int = 5,
         game_id: int | None = None,
         user_id: int | None = None
     ) -> list[UserStatistics]:
@@ -522,26 +537,22 @@ class GameAccessor(BaseAccessor):
         )
         if game_id or user_id:
             if game_id and user_id:
-                query = select(
-                    StatisticsModel
-                ).where(
+                query = query.where(
                     and_(
                         StatisticsModel.game_id == game_id,
                         StatisticsModel.user_id == user_id
                     )
                 )
             elif game_id:
-                query = select(
-                    StatisticsModel
-                ).where(
+                query = query.where(
                     StatisticsModel.game_id == game_id
                 )
             elif user_id:
-                query = select(
-                    StatisticsModel
-                ).where(
+                query = query.where(
                     StatisticsModel.user_id == user_id
                 )
+        if page:
+            query = query.limit(offset).offset(offset * (page - 1))
         async with self.app.database.session() as session:
             result = await session.execute(query)
             user_statistics_models = result.scalars()

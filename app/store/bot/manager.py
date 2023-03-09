@@ -1,5 +1,4 @@
 import typing
-import json
 from logging import getLogger
 
 from app.store.vk_api.dataclasses import (
@@ -29,9 +28,7 @@ class BotManager:
                     await self.app.store.vk_api.send_message(
                         Message(
                             peer_id=update.object.message.peer_id,
-                            keyboard=json.dumps(
-                                create_keyboard.to_dict()
-                            ),
+                            keyboard=create_keyboard,
                             text="Привет! Теперь вам доступна клавиатура бота",
                         )
                     )
@@ -87,7 +84,7 @@ class BotManager:
         await self.app.store.vk_api.send_message(
             Message(
                 peer_id=event.peer_id,
-                keyboard=json.dumps(start_keyboard.to_dict()),
+                keyboard=start_keyboard,
                 text=f"Только что @id{event.user_id} создал игру"
             )
         )
@@ -104,7 +101,7 @@ class BotManager:
             Message(
                 peer_id=event.peer_id,
                 text=f"Только что @id{event.user_id} закончил игру",
-                keyboard=json.dumps(start_keyboard.to_dict())
+                keyboard=create_keyboard
             )
         )
 
@@ -177,7 +174,7 @@ class BotManager:
             Message(
                 peer_id=event.peer_id,
                 text=question.title,
-                keyboard=json.dumps(end_keyboard.to_dict())
+                keyboard=end_keyboard
             )
         )
 
@@ -280,7 +277,7 @@ class BotManager:
                     peer_id=game.peer_id,
                     text=f"Игра окончена. Победитель: @id{winner.vk_id}, \
                         количество очков: {winner.score}",
-                    keyboard=json.dumps(end_keyboard.to_dict())
+                    keyboard=create_keyboard
                 )
             )
             await self.app.store.game.end_game(peer_id=game.peer_id)

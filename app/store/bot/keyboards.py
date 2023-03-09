@@ -29,9 +29,9 @@ class ButtonCallback:
         )
 
 
-class NotInlineCallbackKeyboard:
-    def __init__(self, buttons: list[ButtonCallback]):
-        self.inline = False
+class Keyboard:
+    def __init__(self, inline: bool, buttons: list[ButtonCallback]):
+        self.inline = inline
         self.buttons = buttons
 
     def to_dict(self) -> dict:
@@ -41,7 +41,8 @@ class NotInlineCallbackKeyboard:
         )
 
 
-create_keyboard = NotInlineCallbackKeyboard(
+create_keyboard = Keyboard(
+    inline=False,
     buttons=[
         ButtonCallback(
             command="create",
@@ -51,7 +52,8 @@ create_keyboard = NotInlineCallbackKeyboard(
     ]
 )
 
-start_keyboard = NotInlineCallbackKeyboard(
+start_keyboard = Keyboard(
+    inline=False,
     buttons=[
         ButtonCallback(
             command="start",
@@ -71,7 +73,8 @@ start_keyboard = NotInlineCallbackKeyboard(
     ]
 )
 
-end_keyboard = NotInlineCallbackKeyboard(
+end_keyboard = Keyboard(
+    inline=False,
     buttons=[
         ButtonCallback(
             command="end",

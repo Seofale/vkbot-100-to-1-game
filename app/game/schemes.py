@@ -56,18 +56,6 @@ class QuestionListSchema(Schema):
     questions = fields.Nested(QuestionSchema, many=True)
 
 
-class GameIdSchema(Schema):
-    game_id = fields.Int()
-
-
-class UserIdSchema(Schema):
-    user_id = fields.Int()
-
-
-class GamePeerIdSchema(Schema):
-    peer_id = fields.Int()
-
-
 class GameListSchema(Schema):
     games = fields.Nested(GameSchema, many=True)
 
@@ -82,3 +70,28 @@ class UserListSchema(Schema):
 
 class StatisticsListSchema(Schema):
     statistics = fields.Nested(StatisticsSchema, many=True)
+
+
+class ListQuerySchema(Schema):
+    page = fields.Int()
+
+
+class QuestionListQuerySchema(ListQuerySchema):
+    game_id = fields.Int()
+
+
+class GameListQuerySchema(ListQuerySchema):
+    peer_id = fields.Int()
+
+
+class UserListQuerySchema(ListQuerySchema):
+    game_id = fields.Int()
+
+
+class RoadmapListQuerySchema(ListQuerySchema):
+    game_id = fields.Int()
+
+
+class StatisticsListQuerySchema(ListQuerySchema):
+    user_id = fields.Int()
+    game_id = fields.Int()
