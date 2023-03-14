@@ -51,6 +51,7 @@ class StatisticsModel(Base):
     points: Mapped[int] = mapped_column(default=0)
     failures: Mapped[int] = mapped_column(default=0)
     is_lost: Mapped[bool] = mapped_column(default=False)
+    is_winner: Mapped[bool] = mapped_column(default=False)
 
     def to_dataclass(self) -> UserStatistics:
         return UserStatistics(
@@ -60,7 +61,8 @@ class StatisticsModel(Base):
             is_creator=self.is_creator,
             points=self.points,
             failures=self.failures,
-            is_lost=self.is_lost
+            is_lost=self.is_lost,
+            is_winner=self.is_winner
         )
 
 

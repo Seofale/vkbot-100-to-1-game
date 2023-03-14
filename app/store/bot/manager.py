@@ -90,6 +90,31 @@ class BotManager:
         )
 
     async def end_game(self, event: UpdateEvent) -> None:
+        game = await self.app.store.game.get_game_by_peer_id(
+            peer_id=event.peer_id
+        )
+        if not game:
+            return
+
+        user = await self.app.store.game.get_user(
+            vk_id=event.user_id
+        )
+        if not user:
+            return
+
+        user_statistics = await self.app.store.game.get_user_statistics(
+            user_id=user.id,
+            game_id=game.id
+        )
+        if not user_statistics:
+            return
+        if user_statistics.is_lost:
+            await self.app.store.vk_api.show_snackbar_event_answer(
+                update_event=event,
+                text="Вы выбыли и не можете закончить игру :("
+            )
+            return
+
         await self.app.store.game.end_game(peer_id=event.peer_id)
 
         await self.app.store.vk_api.show_snackbar_event_answer(
@@ -219,6 +244,16 @@ class BotManager:
                     game_id=game.id,
                     user_id=user.id
                 )
+
+            await self.app.store.vk_api.send_message(
+                Message(
+                    peer_id=message.peer_id,
+                    text=f"@id{user.vk_id} \
+                            первым ответил на вопрос, \
+                            но такого ответа не оказалось в списке :(",
+                )
+            )
+
             if user_failures_count == 3:
                 await self.app.store.game.make_user_lost(
                     game_id=game.id,
@@ -231,22 +266,33 @@ class BotManager:
                             исчерпал все свои попытки и выбыл из игры",
                     )
                 )
-            await self.app.store.vk_api.send_message(
-                Message(
-                    peer_id=message.peer_id,
-                    text=f"@id{user.vk_id} \
-                            первым ответил на вопрос, но оказался неправ :(",
-                )
-            )
+
+                if (await self.app.store.game.get_users_count_in_game(
+                    game_id=game.id
+                )) == 1:
+                    winner = await self.app.store.game.get_winner_with_score(
+                        game_id=game.id
+                    )
+                    await self.app.store.vk_api.send_message(
+                        Message(
+                            peer_id=game.peer_id,
+                            text=f"Игра окончена. Победитель: \
+                                @id{winner.vk_id}, \
+                                количество очков: {winner.score}",
+                            keyboard=create_keyboard
+                        )
+                    )
+                    await self.app.store.game.end_game(peer_id=game.peer_id)
+                    return
 
             await self.send_next_question_or_end_game(game=game)
-
             return
 
         await self.app.store.vk_api.send_message(
             Message(
                 peer_id=message.peer_id,
                 text=f"@id{user.vk_id} \
+                            первым ответил на вопрос и \
                             получил {answer.score} очков за свой ответ",
             )
         )

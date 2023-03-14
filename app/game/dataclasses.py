@@ -18,6 +18,7 @@ class UserStatistics:
     points: int
     failures: int
     is_lost: bool
+    is_winner: bool
 
 
 @dataclass
