@@ -4,10 +4,11 @@ class ColorButton:
 
 
 class CommandLabel:
-    create = "Создать игру"
-    start = "Начать игру (для создателя)"
-    end = "Закончить игру"
-    join = "Присоединиться к игре"
+    join = "Присоединиться"
+
+
+class CommandName:
+    join = "join"
 
 
 class ButtonCallback:
@@ -41,45 +42,14 @@ class Keyboard:
         )
 
 
-create_keyboard = Keyboard(
-    inline=False,
-    buttons=[
-        ButtonCallback(
-            command="create",
-            label=CommandLabel.create,
-            color=ColorButton.green
-        )
-    ]
-)
-
-start_keyboard = Keyboard(
-    inline=False,
-    buttons=[
-        ButtonCallback(
-            command="start",
-            label=CommandLabel.start,
-            color=ColorButton.green
-        ),
-        ButtonCallback(
-            command="join",
-            label=CommandLabel.join,
-            color=ColorButton.green
-        ),
-        ButtonCallback(
-            command="end",
-            label=CommandLabel.end,
-            color=ColorButton.red
-        )
-    ]
-)
-
-end_keyboard = Keyboard(
-    inline=False,
-    buttons=[
-        ButtonCallback(
-            command="end",
-            label=CommandLabel.end,
-            color=ColorButton.red
-        )
-    ]
-)
+def join_keyboard():
+    return Keyboard(
+        inline=True,
+        buttons=[
+            ButtonCallback(
+                command=CommandName.join,
+                label=CommandLabel.join,
+                color=ColorButton.green,
+            )
+        ]
+    )

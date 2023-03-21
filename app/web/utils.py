@@ -1,4 +1,5 @@
 from typing import Any
+from typing import Callable
 
 from aiohttp.web import json_response as aiohttp_json_response
 from aiohttp.web_response import Response

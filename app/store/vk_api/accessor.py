@@ -98,26 +98,32 @@ class VkApiAccessor(BaseAccessor):
                                 from_id=message["from_id"],
                                 text=message["text"],
                                 peer_id=message["peer_id"],
+                                conversation_message_id=message[
+                                    "conversation_message_id"
+                                ],
                             ) if message else None,
                             action=UpdateAction(
                                 type=message["action"]["type"],
                                 peer_id=message["peer_id"],
                             ) if update["object"].get(
                                 "message",
-                                {}
+                                {},
                             ).get("action") else None,
                             event=UpdateEvent(
                                 user_id=update["object"]["user_id"],
                                 peer_id=update["object"]["peer_id"],
                                 event_id=update["object"]["event_id"],
                                 payload=update["object"]["payload"],
-                            ) if update["object"].get("event_id") else None
+                            ) if update["object"].get("event_id") else None,
                         ),
                     )
                 )
-            await self.app.store.bot_manager.handle_updates(updates=updates)
+            await self.app.store.tasks_manager.handle_updates(updates=updates)
 
-    async def send_message(self, message: Message):
+    async def send_message(
+        self,
+        message: Message,
+    ):
         async with self.session.get(
             self._build_query(
                 API_PATH,
@@ -135,23 +141,43 @@ class VkApiAccessor(BaseAccessor):
             data = await resp.json()
             self.logger.info(data)
 
-    async def show_snackbar_event_answer(
+    async def edit_message(
         self,
-        update_event: UpdateEvent,
-        text: str
+        message: Message,
+        conversation_message_id: int,
+    ):
+        async with self.session.get(
+            self._build_query(
+                API_PATH,
+                "messages.edit",
+                params={
+                    "conversation_message_id": conversation_message_id,
+                    "peer_id": message.peer_id,
+                    "message": message.text,
+                    "access_token": self.app.config.bot.token,
+                },
+            )
+        ) as resp:
+            data = await resp.json()
+            self.logger.info(data)
+
+    async def show_snackbar(
+        self,
+        event: UpdateEvent,
+        text: str,
     ):
         async with self.session.get(
             self._build_query(
                 API_PATH,
                 "messages.sendMessageEventAnswer",
                 params={
-                    "event_id": update_event.event_id,
-                    "user_id": update_event.user_id,
-                    "peer_id": update_event.peer_id,
+                    "event_id": event.event_id,
+                    "user_id": event.user_id,
+                    "peer_id": event.peer_id,
                     "access_token": self.app.config.bot.token,
                     "event_data": json.dumps({
                         "type": "show_snackbar",
-                        "text": text
+                        "text": text,
                     })
                 },
             )

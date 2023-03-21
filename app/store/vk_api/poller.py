@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import Task
+from logging import getLogger
 
 from app.store import Store
 
@@ -8,12 +8,13 @@ class Poller:
     def __init__(self, store: Store):
         self.store = store
         self.is_running = False
-        self.poll_task: Task | None = None
+        self.poll_task: asyncio.Task | None = None
+        self.logger = getLogger("poller")
 
     async def start(self):
         self.is_running = True
         self.poll_task = asyncio.create_task(self.poll())
-        self.poll_task.add_done_callback(self.log_task_exception)
+        self.poll_task.add_done_callback(self._log_task_exception)
 
     async def stop(self):
         self.is_running = False
@@ -23,9 +24,12 @@ class Poller:
         while self.is_running:
             updates = await self.store.vk_api.poll()
             if updates:
-                await self.store.bots_manager.handle_updates(updates)
+                await self.store.tasks_manager.handle_updates(updates)
 
-    def log_task_exception(self, task):
-        result = task.result()
-        if result is Exception:
-            self.store.logger.info(result.text)
+    def _log_task_exception(self, task: asyncio.Task):
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            self.logger.warning(str(e))

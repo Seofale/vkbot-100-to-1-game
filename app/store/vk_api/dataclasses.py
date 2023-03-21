@@ -7,7 +7,7 @@ from app.store.bot.keyboards import Keyboard
 class Message:
     peer_id: int
     text: str
-    keyboard: Keyboard | None = None
+    keyboard: Keyboard | str = ""
 
 
 @dataclass
@@ -16,6 +16,7 @@ class UpdateMessage:
     from_id: int
     text: str
     peer_id: int
+    conversation_message_id: int
 
 
 @dataclass
