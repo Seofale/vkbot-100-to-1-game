@@ -4,9 +4,17 @@ from dataclasses import dataclass
 
 @dataclass
 class User:
-    id: int
     vk_id: int
+    id: int | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     score: int | None = None
+
+    @property
+    def full_name(self) -> str | None:
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        return None
 
 
 @dataclass

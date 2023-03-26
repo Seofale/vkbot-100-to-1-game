@@ -7,10 +7,12 @@ from aiohttp.client import ClientSession
 
 from app.base.base_accessor import BaseAccessor
 from app.store.vk_api.dataclasses import (
-    Message, Update, UpdateObject, UpdateMessage,
+    Update, UpdateObject, UpdateMessage,
     UpdateAction, UpdateEvent
 )
+from app.game.dataclasses import User
 from app.store.vk_api.poller import Poller
+from app.store.bot.keyboards import Keyboard
 
 if typing.TYPE_CHECKING:
     from app.web.app import Application
@@ -122,7 +124,9 @@ class VkApiAccessor(BaseAccessor):
 
     async def send_message(
         self,
-        message: Message,
+        peer_id: int,
+        text: str,
+        keyboard: Keyboard,
     ):
         async with self.session.get(
             self._build_query(
@@ -130,30 +134,36 @@ class VkApiAccessor(BaseAccessor):
                 "messages.send",
                 params={
                     "random_id": random.randint(1, 2**32),
-                    "peer_id": message.peer_id,
-                    "message": message.text,
+                    "peer_ids": peer_id,
+                    "message": text,
                     "access_token": self.app.config.bot.token,
-                    "keyboard": json.dumps(message.keyboard.to_dict())
-                    if message.keyboard else ""
+                    "keyboard": json.dumps(keyboard.to_dict())
+                    if keyboard != "" else "",
                 },
             )
         ) as resp:
             data = await resp.json()
             self.logger.info(data)
+            if data.get("error"):
+                self.logger.error(msg=data["error"]["error_msg"])
+                return None
+            cmd = data["response"][0]["conversation_message_id"]
+            return cmd
 
     async def edit_message(
         self,
-        message: Message,
-        conversation_message_id: int,
+        peer_id: int,
+        text: str,
+        cmd: int,
     ):
         async with self.session.get(
             self._build_query(
                 API_PATH,
                 "messages.edit",
                 params={
-                    "conversation_message_id": conversation_message_id,
-                    "peer_id": message.peer_id,
-                    "message": message.text,
+                    "conversation_message_id": cmd,
+                    "peer_id": peer_id,
+                    "message": text,
                     "access_token": self.app.config.bot.token,
                 },
             )
@@ -184,3 +194,26 @@ class VkApiAccessor(BaseAccessor):
         ) as resp:
             data = await resp.json()
             self.logger.info(data)
+
+    async def get_user_info(self, vk_id: int):
+        async with self.session.get(
+            self._build_query(
+                API_PATH,
+                "users.get",
+                params={
+                    "access_token": self.app.config.bot.token,
+                    "user_ids": vk_id,
+                },
+            )
+        ) as resp:
+            data = await resp.json()
+            if data.get("error"):
+                self.logger.error(msg=data["error"]["error_msg"])
+                return None
+            self.logger.info(data)
+            user_data = data["response"][0]
+            return User(
+                vk_id=vk_id,
+                first_name=user_data["first_name"],
+                last_name=user_data["last_name"],
+            )

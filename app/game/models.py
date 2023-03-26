@@ -34,11 +34,15 @@ class UserModel(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
     vk_id: Mapped[int]
+    first_name: Mapped[str] = mapped_column(String(128), nullable=True)
+    last_name: Mapped[str] = mapped_column(String(128), nullable=True)
 
     def to_dataclass(self) -> User:
         return User(
             id=self.id,
-            vk_id=self.vk_id
+            vk_id=self.vk_id,
+            first_name=self.first_name,
+            last_name=self.last_name
         )
 
 

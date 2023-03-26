@@ -1,14 +1,5 @@
 from dataclasses import dataclass
 
-from app.store.bot.keyboards import Keyboard
-
-
-@dataclass
-class Message:
-    peer_id: int
-    text: str
-    keyboard: Keyboard | str = ""
-
 
 @dataclass
 class UpdateMessage:

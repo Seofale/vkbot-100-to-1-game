@@ -23,7 +23,19 @@ class GameAccessor(BaseAccessor):
         **kwargs,
     ) -> User:
         session = kwargs.get("session")
-        user_model = UserModel(vk_id=vk_id)
+        user_data = await self.app.store.vk_api.get_user_info(
+            vk_id=vk_id,
+        )
+        if user_data:
+            user_model = UserModel(
+                vk_id=vk_id,
+                first_name=user_data.first_name,
+                last_name=user_data.last_name,
+            )
+        else:
+            user_model = UserModel(
+                vk_id=vk_id,
+            )
         session.add(user_model)
         await session.commit()
         return user_model.to_dataclass()
@@ -102,7 +114,9 @@ class GameAccessor(BaseAccessor):
         return User(
             id=user_model.id,
             vk_id=user_model.vk_id,
-            score=score
+            score=score,
+            first_name=user_model.first_name,
+            last_name=user_model.last_name,
         )
 
     async def get_users_count_in_game(
@@ -335,7 +349,7 @@ class GameAccessor(BaseAccessor):
         )
         await session.commit()
 
-    async def get_question_in_active_roadmap(
+    async def get_active_question(
         self,
         game_id: int,
         **kwargs,
