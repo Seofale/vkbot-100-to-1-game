@@ -4,6 +4,7 @@ import asyncio
 from app.store.vk_api.dataclasses import Update
 from app.store.bot.update_handler import UpdateHandler
 from app.base.base_accessor import BaseAccessor
+from app.store.bot.updates import UpdateEvent, UpdateMessage
 
 if typing.TYPE_CHECKING:
     from app.web.app import Application
@@ -11,6 +12,7 @@ if typing.TYPE_CHECKING:
 
 class UpdateTasksManager(BaseAccessor):
     def __init__(self, app: "Application"):
+        self.app = app
         self.update_handler = UpdateHandler(app)
         self.tasks: list[asyncio.Task] = []
         self.clear_task: asyncio.Task = None
@@ -48,15 +50,15 @@ class UpdateTasksManager(BaseAccessor):
 
     async def handle_updates(self, updates: list[Update]) -> None:
         for update in updates:
-            if update.object.message:
-                update_message = update.object.message
+            if isinstance(update, UpdateMessage):
+                update_message = update
                 task = asyncio.create_task(
                     self.update_handler.handle_message(
                         update_message=update_message
                     )
                 )
-            elif update.object.event:
-                update_event = update.object.event
+            elif isinstance(update, UpdateEvent):
+                update_event = update
                 task = asyncio.create_task(
                     self.update_handler.handle_event(
                         update_event=update_event

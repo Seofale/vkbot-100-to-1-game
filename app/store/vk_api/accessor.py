@@ -6,11 +6,10 @@ from aiohttp import TCPConnector
 from aiohttp.client import ClientSession
 
 from app.base.base_accessor import BaseAccessor
-from app.store.vk_api.dataclasses import (
-    Update, UpdateObject, UpdateMessage,
-    UpdateAction, UpdateEvent
-)
-from app.game.dataclasses import User
+
+from app.store.bot.updates import UpdateEvent, UpdateMessage
+
+from app.game.dataclasses import UserDC
 from app.store.vk_api.poller import Poller
 from app.store.bot.keyboards import Keyboard
 
@@ -90,36 +89,28 @@ class VkApiAccessor(BaseAccessor):
             raw_updates = data.get("updates", [])
             updates = []
             for update in raw_updates:
-                message = update["object"].get("message")
-                updates.append(
-                    Update(
-                        type=update["type"],
-                        object=UpdateObject(
-                            message=UpdateMessage(
-                                id=message["id"],
-                                from_id=message["from_id"],
-                                text=message["text"],
-                                peer_id=message["peer_id"],
-                                conversation_message_id=message[
-                                    "conversation_message_id"
-                                ],
-                            ) if message else None,
-                            action=UpdateAction(
-                                type=message["action"]["type"],
-                                peer_id=message["peer_id"],
-                            ) if update["object"].get(
-                                "message",
-                                {},
-                            ).get("action") else None,
-                            event=UpdateEvent(
-                                user_id=update["object"]["user_id"],
-                                peer_id=update["object"]["peer_id"],
-                                event_id=update["object"]["event_id"],
-                                payload=update["object"]["payload"],
-                            ) if update["object"].get("event_id") else None,
-                        ),
+                upd_obj = update["object"]
+                if upd_obj.get("message"):
+                    message = upd_obj.get("message")
+                    updates.append(
+                        UpdateMessage(
+                            app=self.app,
+                            user_id=message["from_id"],
+                            text=message["text"],
+                            peer_id=message["peer_id"],
+                            cmd=message["conversation_message_id"],
+                        )
                     )
-                )
+                elif upd_obj.get("event_id"):
+                    updates.append(
+                        UpdateEvent(
+                            app=self.app,
+                            user_id=upd_obj["user_id"],
+                            peer_id=upd_obj["peer_id"],
+                            event_id=upd_obj["event_id"],
+                            payload=upd_obj["payload"],
+                        )
+                    )
             await self.app.store.tasks_manager.handle_updates(updates=updates)
 
     async def send_message(
@@ -127,7 +118,10 @@ class VkApiAccessor(BaseAccessor):
         peer_id: int,
         text: str,
         keyboard: Keyboard,
-    ):
+    ) -> int:
+        """
+        return conversation_message_id which helps to edit and delete messages
+        """
         async with self.session.get(
             self._build_query(
                 API_PATH,
@@ -212,7 +206,7 @@ class VkApiAccessor(BaseAccessor):
                 return None
             self.logger.info(data)
             user_data = data["response"][0]
-            return User(
+            return UserDC(
                 vk_id=vk_id,
                 first_name=user_data["first_name"],
                 last_name=user_data["last_name"],

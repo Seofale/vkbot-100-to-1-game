@@ -12,7 +12,7 @@ from app.game.schemes import (
     UserListSchema, RoadmapListSchema, QuestionEditSchema,
     StatisticsListSchema, UserListQuerySchema, RoadmapListQuerySchema
 )
-from app.game.dataclasses import Answer
+from app.game.dataclasses import AnswerDC
 
 
 class QuestionAddView(AuthRequiredMixin, View):
@@ -23,7 +23,7 @@ class QuestionAddView(AuthRequiredMixin, View):
         question = await self.store.game.get_question_by_title(title=title)
         if question:
             raise HTTPConflict
-        answers = [Answer(score=a["score"], title=a["title"])
+        answers = [AnswerDC(score=a["score"], title=a["title"])
                    for a in self.data["answers"]]
         if len(answers) != 3:
             raise HTTPBadRequest
@@ -44,7 +44,7 @@ class QuestionEditView(AuthRequiredMixin, View):
         )
         if not question:
             raise HTTPNotFound
-        answers = [Answer(id=a["id"], score=a["score"], title=a["title"])
+        answers = [AnswerDC(id=a["id"], score=a["score"], title=a["title"])
                    for a in question_dict["answers"]]
         question = await self.store.game.edit_question(
             id=question_dict["id"],

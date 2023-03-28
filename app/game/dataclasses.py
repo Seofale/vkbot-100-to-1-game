@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class User:
+class UserDC:
     vk_id: int
     id: int | None = None
     first_name: str | None = None
@@ -18,7 +18,7 @@ class User:
 
 
 @dataclass
-class UserStatistics:
+class UserStatisticsDC:
     id: int
     user_id: int
     game_id: int
@@ -30,7 +30,7 @@ class UserStatistics:
 
 
 @dataclass
-class Game:
+class GameDC:
     id: int
     peer_id: int
     in_process: bool
@@ -39,14 +39,14 @@ class Game:
 
 
 @dataclass
-class Question:
+class QuestionDC:
     id: int
     title: str
-    answers: list["Answer"]
+    answers: list["AnswerDC"]
 
 
 @dataclass
-class Answer:
+class AnswerDC:
     title: str
     score: int
     id: int | None = None
@@ -54,7 +54,7 @@ class Answer:
 
 
 @dataclass
-class Roadmap:
+class RoadmapDC:
     id: int
     game_id: int
     question_id: int
@@ -62,7 +62,7 @@ class Roadmap:
 
 
 @dataclass
-class GameAnswer:
+class GameAnswerDC:
     id: int
     game_id: int
     user_id: int

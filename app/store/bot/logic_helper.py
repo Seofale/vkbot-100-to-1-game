@@ -5,7 +5,7 @@ from logging import getLogger
 from app.store.vk_api.dataclasses import UpdateMessage
 from app.store.bot.message import Message
 from app.store.bot.constants import BotMessages
-from app.game.dataclasses import User
+from app.game.dataclasses import UserDC
 
 if typing.TYPE_CHECKING:
     from app.web.app import Application
@@ -16,7 +16,7 @@ class LogicHelper:
         self.app = app
         self.logger = getLogger("update_handler")
 
-    async def get_or_create_user(self, vk_id: int) -> User:
+    async def get_or_create_user(self, vk_id: int) -> UserDC:
         user = await self.app.store.game.get_user(
             vk_id=vk_id,
         )

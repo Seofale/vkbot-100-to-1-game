@@ -9,8 +9,8 @@ from app.game.models import (
     GameAnswersModel,
 )
 from app.game.dataclasses import (
-    User, Game, Question,
-    Answer, UserStatistics, Roadmap
+    UserDC, GameDC, QuestionDC,
+    AnswerDC, UserStatisticsDC, RoadmapDC
 )
 from app.store.utils import decorate_all_methods, add_db_session_to_accessor
 
@@ -21,7 +21,7 @@ class GameAccessor(BaseAccessor):
         self,
         vk_id: int,
         **kwargs,
-    ) -> User:
+    ) -> UserDC:
         session = kwargs.get("session")
         user_data = await self.app.store.vk_api.get_user_info(
             vk_id=vk_id,
@@ -44,7 +44,7 @@ class GameAccessor(BaseAccessor):
         self,
         vk_id: int,
         **kwargs,
-    ) -> User | None:
+    ) -> UserDC | None:
         query = select(
             UserModel
         ).where(UserModel.vk_id == vk_id)
@@ -60,7 +60,7 @@ class GameAccessor(BaseAccessor):
         game_id: int,
         user_id: int,
         **kwargs,
-    ) -> UserStatistics | None:
+    ) -> UserStatisticsDC | None:
         query = select(StatisticsModel).where(
             and_(
                 StatisticsModel.game_id == game_id,
@@ -78,7 +78,7 @@ class GameAccessor(BaseAccessor):
         self,
         game_id: int,
         **kwargs,
-    ) -> User:
+    ) -> UserDC:
         query = select(
             UserModel
         ).where(
@@ -111,7 +111,7 @@ class GameAccessor(BaseAccessor):
             )
         )
         await session.commit()
-        return User(
+        return UserDC(
             id=user_model.id,
             vk_id=user_model.vk_id,
             score=score,
@@ -157,7 +157,7 @@ class GameAccessor(BaseAccessor):
         self,
         peer_id: int,
         **kwargs,
-    ) -> Game:
+    ) -> GameDC:
         session = kwargs.get("session")
         game_model = GameModel(peer_id=peer_id)
         session.add(game_model)
@@ -186,7 +186,7 @@ class GameAccessor(BaseAccessor):
         self,
         peer_id: int,
         **kwargs,
-    ) -> Game | None:
+    ) -> GameDC | None:
         query = select(GameModel).where(
             and_(
                 GameModel.peer_id == peer_id,
@@ -205,7 +205,7 @@ class GameAccessor(BaseAccessor):
         title: str,
         question_id: int,
         **kwargs,
-    ) -> Answer | None:
+    ) -> AnswerDC | None:
         query = select(AnswerModel).where(
             and_(
                 AnswerModel.title == title,
@@ -353,7 +353,7 @@ class GameAccessor(BaseAccessor):
         self,
         game_id: int,
         **kwargs,
-    ) -> Question | None:
+    ) -> QuestionDC | None:
         query = select(
             QuestionModel
         ).options(
@@ -411,7 +411,7 @@ class GameAccessor(BaseAccessor):
         self,
         title: str,
         **kwargs,
-    ) -> Question | None:
+    ) -> QuestionDC | None:
         query = select(
             QuestionModel
         ).options(
@@ -435,7 +435,7 @@ class GameAccessor(BaseAccessor):
         self,
         id: int,
         **kwargs,
-    ) -> Question | None:
+    ) -> QuestionDC | None:
         query = select(
             QuestionModel
         ).options(
@@ -458,9 +458,9 @@ class GameAccessor(BaseAccessor):
     async def create_question(
         self,
         title: str,
-        answers: list[Answer],
+        answers: list[AnswerDC],
         **kwargs,
-    ) -> Question:
+    ) -> QuestionDC:
         session = kwargs.get("session")
         question_model = QuestionModel(
             title=title
@@ -488,9 +488,9 @@ class GameAccessor(BaseAccessor):
         self,
         id: int,
         title: str,
-        answers: list[Answer],
+        answers: list[AnswerDC],
         **kwargs,
-    ) -> Question:
+    ) -> QuestionDC:
         query = select(
             QuestionModel
         ).options(
@@ -521,7 +521,7 @@ class GameAccessor(BaseAccessor):
         offset: int = 5,
         game_id: int | None = None,
         **kwargs,
-    ) -> list[Question]:
+    ) -> list[QuestionDC]:
         query = select(
             QuestionModel
         ).options(
@@ -547,7 +547,7 @@ class GameAccessor(BaseAccessor):
                     answer_model.to_dataclass()
                 )
             questions.append(
-                Question(
+                QuestionDC(
                     id=question_model.id,
                     title=question_model.title,
                     answers=answers
@@ -561,7 +561,7 @@ class GameAccessor(BaseAccessor):
         offset: int = 5,
         peer_id: int | None = None,
         **kwargs,
-    ) -> list[Game]:
+    ) -> list[GameDC]:
         query = select(
             GameModel
         )
@@ -587,7 +587,7 @@ class GameAccessor(BaseAccessor):
         offset: int = 5,
         game_id: int | None = None,
         **kwargs,
-    ) -> list[Game]:
+    ) -> list[UserDC]:
         query = select(
             UserModel
         )
@@ -615,7 +615,7 @@ class GameAccessor(BaseAccessor):
         offset: int = 5,
         game_id: int | None = None,
         **kwargs,
-    ) -> list[Roadmap]:
+    ) -> list[RoadmapDC]:
         query = select(
             RoadmapModel
         )
@@ -642,7 +642,7 @@ class GameAccessor(BaseAccessor):
         game_id: int | None = None,
         user_id: int | None = None,
         **kwargs,
-    ) -> list[UserStatistics]:
+    ) -> list[UserStatisticsDC]:
         query = select(
             StatisticsModel
         )
