@@ -11,13 +11,13 @@ class Message:
         app: "Application",
         peer_id: int,
         text: str,
-        keyboard: Keyboard | None = "",
+        keyboard: Keyboard | str = "",
     ):
         self.app = app
         self.peer_id = peer_id
         self.text = text
         self.keyboard = keyboard
-        self.cmd: int = None
+        self.cmd = None
 
     async def send(self):
         self.cmd = await self.app.store.vk_api.send_message(

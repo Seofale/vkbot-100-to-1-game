@@ -28,5 +28,5 @@ class BotMessages:
     user_join = "Вы присоединились к игре"
     user_failed = "{user} неверно ответил на вопрос"
     user_lost = "{user} выбывает из игры"
-    user_right = "{user} верно ответил на вопрос и получил {points} очков"
-    end_game = "Игра окончена. Победитель: {user}, он набрал {points} очков"
+    user_right = "{user} верно ответил на вопрос и получил {score} очков"
+    end_game = "Игра окончена. Победитель: {user}, он набрал {score} очков"

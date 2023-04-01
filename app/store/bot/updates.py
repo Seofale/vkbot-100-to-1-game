@@ -1,6 +1,8 @@
 import typing
 
 from app.store.bot.game import Game
+from app.store.bot.user import User
+from app.store.bot.keyboards import Keyboard
 
 if typing.TYPE_CHECKING:
     from app.web.app import Application
@@ -22,9 +24,13 @@ class Update:
             app=app,
             peer_id=peer_id,
         )
+        self.user = User(
+            app=app,
+            vk_id=user_id,
+        )
 
 
-class UpdateMessage:
+class UpdateMessage(Update):
     def __init__(
         self,
         app: "Application",
@@ -43,8 +49,15 @@ class UpdateMessage:
         self.text = text
         self.cmd = cmd
 
+    async def answer(self, text: str, keyboard: Keyboard | str = ""):
+        await self.app.store.vk_api.send_message(
+            peer_id=self.peer_id,
+            text=text,
+            keyboard=keyboard,
+        )
 
-class UpdateEvent:
+
+class UpdateEvent(Update):
     def __init__(
         self,
         app: "Application",
@@ -60,3 +73,11 @@ class UpdateEvent:
             event_id=event_id,
         )
         self.payload = payload
+
+    async def show_snackbar(self, text: str):
+        await self.app.store.vk_api.show_snackbar(
+            event_id=self.event_id,
+            user_id=self.user_id,
+            peer_id=self.peer_id,
+            text=text,
+        )

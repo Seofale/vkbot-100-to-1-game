@@ -200,7 +200,7 @@ class GameAccessor(BaseAccessor):
             return game_model.to_dataclass()
         return None
 
-    async def get_answer_by_title_and_question_id(
+    async def get_answer(
         self,
         title: str,
         question_id: int,

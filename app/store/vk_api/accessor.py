@@ -98,6 +98,7 @@ class VkApiAccessor(BaseAccessor):
                             user_id=message["from_id"],
                             text=message["text"],
                             peer_id=message["peer_id"],
+                            event_id=update["event_id"],
                             cmd=message["conversation_message_id"],
                         )
                     )
@@ -167,7 +168,9 @@ class VkApiAccessor(BaseAccessor):
 
     async def show_snackbar(
         self,
-        event: UpdateEvent,
+        event_id: int,
+        user_id: int,
+        peer_id: int,
         text: str,
     ):
         async with self.session.get(
@@ -175,9 +178,9 @@ class VkApiAccessor(BaseAccessor):
                 API_PATH,
                 "messages.sendMessageEventAnswer",
                 params={
-                    "event_id": event.event_id,
-                    "user_id": event.user_id,
-                    "peer_id": event.peer_id,
+                    "event_id": event_id,
+                    "user_id": user_id,
+                    "peer_id": peer_id,
                     "access_token": self.app.config.bot.token,
                     "event_data": json.dumps({
                         "type": "show_snackbar",
