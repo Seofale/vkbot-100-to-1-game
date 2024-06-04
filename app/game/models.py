@@ -4,8 +4,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.store.database.sqlalchemy_base import Base
 from app.game.dataclasses import (
-    User, Game, Question, GameAnswer,
-    Answer, UserStatistics, Roadmap
+    UserDC, GameDC, QuestionDC, GameAnswerDC,
+    AnswerDC, UserStatisticsDC, RoadmapDC
 )
 
 
@@ -20,8 +20,8 @@ class GameModel(Base):
     in_process: Mapped[bool] = mapped_column(default=True)
     roadmaps: Mapped[list["RoadmapModel"]] = relationship("RoadmapModel")
 
-    def to_dataclass(self) -> Game:
-        return Game(
+    def to_dataclass(self) -> GameDC:
+        return GameDC(
             id=self.id,
             peer_id=self.peer_id,
             in_process=self.in_process,
@@ -37,8 +37,8 @@ class UserModel(Base):
     first_name: Mapped[str] = mapped_column(String(128), nullable=True)
     last_name: Mapped[str] = mapped_column(String(128), nullable=True)
 
-    def to_dataclass(self) -> User:
-        return User(
+    def to_dataclass(self) -> UserDC:
+        return UserDC(
             id=self.id,
             vk_id=self.vk_id,
             first_name=self.first_name,
@@ -57,8 +57,8 @@ class StatisticsModel(Base):
     is_lost: Mapped[bool] = mapped_column(default=False)
     is_winner: Mapped[bool] = mapped_column(default=False)
 
-    def to_dataclass(self) -> UserStatistics:
-        return UserStatistics(
+    def to_dataclass(self) -> UserStatisticsDC:
+        return UserStatisticsDC(
             id=self.id,
             game_id=self.game_id,
             user_id=self.user_id,
@@ -76,8 +76,8 @@ class QuestionModel(Base):
     title: Mapped[str] = mapped_column(String(256))
     answers: Mapped[list["AnswerModel"]] = relationship("AnswerModel")
 
-    def to_dataclass(self) -> Question:
-        return Question(
+    def to_dataclass(self) -> QuestionDC:
+        return QuestionDC(
             id=self.id,
             title=self.title,
             answers=[answer.to_dataclass() for answer in self.answers]
@@ -91,8 +91,8 @@ class AnswerModel(Base):
     question_id: Mapped[int] = mapped_column(ForeignKey("questions.id"))
     score: Mapped[int]
 
-    def to_dataclass(self) -> Answer:
-        return Answer(
+    def to_dataclass(self) -> AnswerDC:
+        return AnswerDC(
             id=self.id,
             title=self.title,
             score=self.score,
@@ -107,8 +107,8 @@ class RoadmapModel(Base):
     question_id: Mapped[int] = mapped_column(ForeignKey("questions.id"))
     status: Mapped[int]
 
-    def to_dataclass(self) -> Roadmap:
-        return Roadmap(
+    def to_dataclass(self) -> RoadmapDC:
+        return RoadmapDC(
             id=self.id,
             game_id=self.game_id,
             question_id=self.question_id,
@@ -123,8 +123,8 @@ class GameAnswersModel(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     answer_id: Mapped[int] = mapped_column(ForeignKey("answers.id"))
 
-    def to_dataclass(self) -> GameAnswer:
-        return GameAnswer(
+    def to_dataclass(self) -> GameAnswerDC:
+        return GameAnswerDC(
             id=self.id,
             game_id=self.game_id,
             user_id=self.user_id,

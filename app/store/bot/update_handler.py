@@ -1,205 +1,136 @@
 import typing
+from functools import wraps
 from logging import getLogger
 if typing.TYPE_CHECKING:
     from app.web.app import Application
 
-from app.store.vk_api.dataclasses import UpdateMessage, UpdateEvent
-from app.store.bot.message import Message
+from app.store.bot.updates import UpdateMessage, UpdateEvent, Update
 from app.store.bot.constants import (
     BotTextCommands, BotMessages, BotEventCommands
 )
-from app.store.bot.logic_helper import LogicHelper
 from app.store.bot.keyboards import join_keyboard
+
+
+def filter_game(needed: bool):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            upd: Update = list(kwargs.values())[0]
+            game_exists = await upd.game.exists()
+            if game_exists:
+                await upd.game.init()
+            if game_exists is needed:
+                await func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def init_user(func):
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        upd: Update = list(kwargs.values())[0]
+        await upd.user.init()
+        await func(*args, **kwargs)
+    return wrapper
 
 
 class UpdateHandler:
     def __init__(self, app: "Application"):
         self.app = app
         self.logger = getLogger("update_handler")
-        self.logic_helper = LogicHelper(app)
 
-    async def handle_message(self, update_message: UpdateMessage):
-        text = update_message.text
+    async def handle_message(self, upd_msg: UpdateMessage):
+        text = upd_msg.text
         match text:
             case BotTextCommands.get_info:
-                await self.get_info(update_message=update_message)
+                await self.get_info(upd_msg=upd_msg)
             case BotTextCommands.create_game:
-                await self.create_game(update_message=update_message)
+                await self.create_game(upd_msg=upd_msg)
             case _:
-                await self.handle_answer(update_message=update_message)
+                await self.handle_answer(upd_msg=upd_msg)
 
-    async def handle_event(self, update_event: UpdateEvent):
-        command = update_event.payload.get("command")
+    async def handle_event(self, upd_event: UpdateEvent):
+        command = upd_event.payload.get("command")
         match command:
             case BotEventCommands.join:
-                await self.join_player(update_event=update_event)
+                await self.join_player(upd_event=upd_event)
 
-    async def get_info(self, update_message: UpdateMessage):
-        message = Message(
-            app=self.app,
-            peer_id=update_message.peer_id,
-            text=BotMessages.info,
-        )
-        await message.send()
+    async def get_info(self, upd_msg: UpdateMessage):
+        await upd_msg.answer(text=BotMessages.info)
 
-    async def create_game(self, update_message: UpdateMessage):
-        game = await self.app.store.game.get_game_by_peer_id(
-            peer_id=update_message.peer_id,
-        )
-        if game:
-            self.logger.error("Game already exists!")
-            return
+    @filter_game(needed=False)
+    @init_user
+    async def create_game(self, upd_msg: UpdateMessage):
+        await upd_msg.game.create()
+        await upd_msg.game.create_user(user=upd_msg.user)
 
-        user = await self.logic_helper.get_or_create_user(
-            vk_id=update_message.from_id,
-        )
-        game = await self.app.store.game.create_game(
-            peer_id=update_message.peer_id,
-        )
-        await self.app.store.game.create_user_statistics(
-            user_id=user.id,
-            game_id=game.id,
-        )
-
-        message = Message(
-            app=self.app,
-            peer_id=update_message.peer_id,
+        await upd_msg.answer(
             text=BotMessages.create,
             keyboard=join_keyboard(),
         )
-        await message.send()
+        await upd_msg.game.back_timer()
 
-        await self.logic_helper.back_timer(update_message=update_message)
+        question = await upd_msg.game.get_active_question()
+        await upd_msg.answer(text=question.title)
 
-        await self.logic_helper.start_game(
-            update_message=update_message,
-            game_id=game.id,
-        )
-
-    async def join_player(self, update_event: UpdateEvent):
-        game = await self.app.store.game.get_game_by_peer_id(
-            peer_id=update_event.peer_id,
-        )
-        if not game:
-            return
-
-        user = await self.logic_helper.get_or_create_user(
-            vk_id=update_event.user_id,
-        )
-        user_in_game = await self.app.store.game.get_user_statistics(
-            game_id=game.id,
-            user_id=user.id,
+    @filter_game(needed=True)
+    @init_user
+    async def join_player(self, upd_event: UpdateEvent):
+        user_in_game = await upd_event.game.check_user_in_game(
+            user=upd_event.user,
         )
         if not user_in_game:
-            await self.app.store.game.create_user_statistics(
-                game_id=game.id,
-                user_id=user.id,
-            )
-            await self.app.store.vk_api.show_snackbar(
-                event=update_event,
-                text=BotMessages.user_join,
-            )
+            await upd_event.game.create_user(user=upd_event.user)
+            await upd_event.show_snackbar(text=BotMessages.already_join)
             return
 
-        await self.app.store.vk_api.show_snackbar(
-            event=update_event,
-            text=BotMessages.already_join,
-        )
+        await upd_event.show_snackbar(text=BotMessages.already_join)
 
-    async def handle_answer(self, update_message: UpdateMessage):
-        game = await self.app.store.game.get_game_by_peer_id(
-            peer_id=update_message.peer_id,
-        )
-        if not game:
+    @filter_game(needed=True)
+    async def handle_answer(self, upd_msg: UpdateMessage):
+        if not await upd_msg.user.get():
             return
-        user = await self.app.store.game.get_user(
-            vk_id=update_message.from_id,
-        )
-        if not user:
+        if not await upd_msg.game.check_user_in_game(user=upd_msg.user):
             return
 
-        now_question = await self.app.store.game.get_active_question(
-            game_id=game.id,
-        )
-        answer = await self.app.store.game.get_answer_by_title_and_question_id(
-            title=update_message.text.lower(),
-            question_id=now_question.id,
-        )
-
+        answer = await upd_msg.game.get_answer(title=upd_msg.text)
         if not answer:
-            await self.app.store.game.add_fail_to_user(
-                game_id=game.id,
-                user_id=user.id,
-            )
-            await self.app.store.game.get_user_statistics(
-                game_id=game.id,
-                user_id=user.id,
-            )
-            message = Message(
-                app=self.app,
-                peer_id=update_message.peer_id,
-                text=BotMessages.user_failed.format(user=user.full_name),
-            )
-            await message.send()
-
-            failures_count = await self.app.store.game.get_user_failures_count(
-                game_id=game.id,
-                user_id=user.id,
-            )
-            if failures_count == 3:
-                await self.app.store.game.make_user_lost(
-                    game_id=game.id,
-                    user_id=user.id,
-                )
-                message = Message(
-                    app=self.app,
-                    peer_id=update_message.peer_id,
-                    text=BotMessages.user_lost.format(user=user.full_name),
-                )
-                await message.send()
-        else:
-            await self.app.store.game.add_points_to_user(
-                game_id=game.id,
-                user_id=user.id,
-                score=answer.score,
-            )
-            message = Message(
-                app=self.app,
-                peer_id=update_message.peer_id,
-                text=BotMessages.user_right.format(
-                    user=user.full_name,
-                    points=answer.score,
+            await upd_msg.game.add_fail(user=upd_msg.user)
+            await upd_msg.answer(
+                text=BotMessages.user_failed.format(
+                    user=upd_msg.user.full_name,
                 ),
             )
-            await message.send()
 
-        next_question_exists = await self.app.store.game.move_to_next_question(
-            game_id=game.id,
-        )
-        if not next_question_exists:
-            await self.app.store.game.end_game(
-                peer_id=update_message.peer_id,
+            user_lost = await upd_msg.game.check_user_lost(user=upd_msg.user)
+            if user_lost:
+                await upd_msg.answer(
+                    text=BotMessages.user_lost.format(
+                        user=upd_msg.user.full_name
+                    ),
+                )
+        else:
+            await upd_msg.game.add_points(
+                user=upd_msg.user,
+                score=answer.score,
             )
-            winner = await self.app.store.game.get_winner_with_score(
-                game_id=game.id,
-            )
-            message = Message(
-                app=self.app,
-                peer_id=update_message.peer_id,
-                text=BotMessages.end_game.format(
-                    user=winner.full_name,
-                    points=winner.score,
+            await upd_msg.answer(
+                text=BotMessages.user_right.format(
+                    user=upd_msg.user.full_name,
+                    score=answer.score,
                 )
             )
-            await message.send()
+
+        next_question = await upd_msg.game.get_next_question()
+        if next_question:
+            await upd_msg.answer(text=next_question.title)
             return
 
-        next_question = await self.app.store.game.get_active_question(
-            game_id=game.id,
+        await upd_msg.game.end()
+        winner = await upd_msg.game.get_winner()
+        await upd_msg.answer(
+            text=BotMessages.end_game(
+                user=winner.full_name,
+                score=winner.score,
+            )
         )
-        message = Message(
-            app=self.app,
-            peer_id=update_message.peer_id,
-            text=next_question.title,
-        )
-        await message.send()
